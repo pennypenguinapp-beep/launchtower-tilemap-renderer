@@ -152,6 +152,7 @@
     </div>
 
     <div class="btnrow">
+      <button class="btn" id="loadExample">Load example</button>
       <button class="btn" id="renderBtn">Render map</button>
       <button class="btn green" id="downloadBtn">Download PNG</button>
     </div>
@@ -381,7 +382,91 @@
     document.body.appendChild(a); a.click(); a.remove();
   }
 
+  // ---------- load example ----------
+  function loadExample(){
+    var T = 16, cols = 8, rows = 4;
+    var c = document.createElement('canvas');
+    c.width = T * cols; c.height = T * rows;
+    var g = c.getContext('2d');
+    g.imageSmoothingEnabled = false;
+    function px(x, y, color){ g.fillStyle = color; g.fillRect(x, y, 1, 1); }
+    function tile(idx, fn){
+      var ox = (idx % cols) * T, oy = Math.floor(idx / cols) * T;
+      g.save(); g.translate(ox, oy); fn(); g.restore();
+    }
+    // 0: grass
+    tile(0, function(){
+      g.fillStyle = '#3f9b4f'; g.fillRect(0,0,T,T);
+      for(var i=0;i<40;i++){ px((Math.random()*T)|0,(Math.random()*T)|0, Math.random()<.5?'#4fb35f':'#358544'); }
+    });
+    // 1: dirt
+    tile(1, function(){
+      g.fillStyle = '#8a5a34'; g.fillRect(0,0,T,T);
+      for(var i=0;i<34;i++){ px((Math.random()*T)|0,(Math.random()*T)|0, Math.random()<.5?'#9c6a3f':'#754a2a'); }
+    });
+    // 2: water
+    tile(2, function(){
+      g.fillStyle = '#2f6fd0'; g.fillRect(0,0,T,T);
+      g.fillStyle = '#4f8fe8';
+      for(var r=0;r<T;r+=4){ for(var x=0;x<T;x+=8){ g.fillRect(x + (r%8?0:4), r, 4, 1); } }
+    });
+    // 3: stone
+    tile(3, function(){
+      g.fillStyle = '#6b7280'; g.fillRect(0,0,T,T);
+      g.fillStyle = '#565d6b';
+      g.fillRect(0,0,T,2); g.fillRect(0,8,T,2); g.fillRect(6,2,2,6); g.fillRect(2,10,2,6); g.fillRect(10,10,2,6);
+      g.fillStyle = '#7d8595'; g.fillRect(0,2,T,1); g.fillRect(0,10,T,1);
+    });
+    // 4: brick
+    tile(4, function(){
+      g.fillStyle = '#a34a3a'; g.fillRect(0,0,T,T);
+      g.fillStyle = '#7c352a';
+      for(var r=0;r<T;r+=4){ g.fillRect(0,r,T,1); if(r%8===0){ for(var x=4;x<T;x+=8) g.fillRect(x,r,1,4); } else { for(var x=0;x<T;x+=8) g.fillRect(x,r,1,4); } }
+    });
+    // 5: sand
+    tile(5, function(){
+      g.fillStyle = '#e0c47a'; g.fillRect(0,0,T,T);
+      for(var i=0;i<30;i++){ px((Math.random()*T)|0,(Math.random()*T)|0, Math.random()<.5?'#eed99a':'#cfae62'); }
+    });
+    // 6: lava
+    tile(6, function(){
+      g.fillStyle = '#d84315'; g.fillRect(0,0,T,T);
+      g.fillStyle = '#ff8a3c';
+      for(var i=0;i<14;i++){ var x=(Math.random()*T)|0,y=(Math.random()*T)|0; g.fillRect(x,y,2,2); }
+      g.fillStyle = '#ffd54f';
+      for(var j=0;j<6;j++){ px((Math.random()*T)|0,(Math.random()*T)|0,'#ffd54f'); }
+    });
+    // 7: tree
+    tile(7, function(){
+      g.fillStyle = '#3f9b4f'; g.fillRect(0,0,T,T);
+      g.fillStyle = '#6b4423'; g.fillRect(6,10,4,6);
+      g.fillStyle = '#2f7a3c';
+      g.fillRect(2,2,12,8);
+      g.fillStyle = '#4fb35f';
+      g.fillRect(4,1,8,6);
+    });
+
+    tilesetImage = c; tilesetW = c.width; tilesetH = c.height;
+    tilesetLabel.textContent = 'Example tileset (128\u00d764, 8\u00d74 tiles)';
+    tilesetBox.classList.add('loaded');
+    setStatus(tilesetStatus, 'Example tileset loaded', true);
+
+    var map = [
+      [7,7,0,0,0,0,7,7],
+      [7,0,0,2,2,0,0,7],
+      [0,0,2,2,2,2,0,0],
+      [0,2,2,2,2,2,2,0],
+      [0,2,2,2,2,2,2,0],
+      [0,0,2,2,2,2,0,0],
+      [0,0,0,5,5,0,0,0],
+      [7,7,0,5,5,0,7,7]
+    ];
+    mapInput.value = map.map(function(row){ return row.join(','); }).join('\n');
+    render();
+  }
+
   // ---------- events ----------
+  document.getElementById('loadExample').addEventListener('click', loadExample);
   renderBtn.addEventListener('click', render);
   downloadBtn.addEventListener('click', download);
 
