@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tilemap Renderer — LaunchTower</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c2330; --border:#2d3748;
+    --text:#e6edf3; --muted:#8b98a9; --accent:#4f8cff; --accent2:#3ddc97;
+    --danger:#ff6b6b; --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    min-height:100vh; display:flex; flex-direction:column;
+  }
+  header{
+    padding:18px 22px; border-bottom:1px solid var(--border);
+    display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
+  }
+  header h1{font-size:19px; margin:0; font-weight:650; letter-spacing:.2px;}
+  header h1 span{color:var(--accent);}
+  .tag{font-size:12px; color:var(--muted);}
+  main{
+    flex:1; width:100%; max-width:1180px; margin:0 auto; padding:20px 22px 40px;
+    display:grid; grid-template-columns:360px 1fr; gap:18px;
+  }
+  @media (max-width:880px){ main{grid-template-columns:1fr;} }
+  .card{
+    background:var(--panel); border:1px solid var(--border); border-radius:var(--radius);
+    padding:16px;
+  }
+  .card h2{font-size:13px; text-transform:uppercase; letter-spacing:.8px; color:var(--muted); margin:0 0 12px;}
+  label{display:block; font-size:13px; color:var(--muted); margin:12px 0 5px;}
+  textarea, input[type=text], input[type=number], select{
+    width:100%; background:var(--panel2); color:var(--text); border:1px solid var(--border);
+    border-radius:8px; padding:9px 11px; font-size:13px; font-family:inherit;
+  }
+  textarea{min-height:170px; resize:vertical; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12.5px; line-height:1.55;}
+  textarea:focus, input:focus, select:focus{outline:none; border-color:var(--accent);}
+  .row{display:flex; gap:10px;}
+  .row > div{flex:1;}
+  .btn{
+    display:inline-flex; align-items:center; justify-content:center; gap:7px;
+    background:var(--accent); color:#fff; border:none; border-radius:8px;
+    padding:10px 16px; font-size:14px; font-weight:600; cursor:pointer; margin-top:12px;
+    transition:filter .15s;
+  }
+  .btn:hover{filter:brightness(1.12);}
+  .btn.ghost{background:transparent; border:1px solid var(--border); color:var(--text); font-weight:500;}
+  .btn.green{background:var(--accent2); color:#062015;}
+  .btn:disabled{opacity:.5; cursor:not-allowed;}
+  .btnrow{display:flex; gap:10px; flex-wrap:wrap;}
+  .btnrow .btn{flex:1; min-width:130px;}
+  .filebox{
+    border:1.5px dashed var(--border); border-radius:8px; padding:14px; text-align:center;
+    color:var(--muted); font-size:13px; cursor:pointer; transition:border-color .15s, background .15s;
+  }
+  .filebox:hover{border-color:var(--accent); background:rgba(79,140,255,.05);}
+  .filebox.loaded{border-color:var(--accent2); color:var(--accent2);}
+  .filebox input{display:none;}
+  .status{font-size:12.5px; margin-top:10px; min-height:18px;}
+  .status.ok{color:var(--accent2);}
+  .status.err{color:var(--danger);}
+  .canvaswrap{
+    background:var(--panel2); border:1px solid var(--border); border-radius:8px;
+    display:flex; align-items:center; justify-content:center; overflow:auto;
+    min-height:340px; max-height:640px; padding:10px;
+  }
+  canvas{image-rendering:pixelated; image-rendering:crisp-edges; max-width:100%; height:auto; display:block;}
+  .hint{font-size:12px; color:var(--muted); margin-top:8px;}
+  .hint code{background:var(--panel2); padding:1px 5px; border-radius:4px; font-size:11.5px;}
+  .chips{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;}
+  .chip{
+    font-size:12px; padding:5px 11px; border-radius:999px; border:1px solid var(--border);
+    background:var(--panel2); color:var(--text); cursor:pointer;
+  }
+  .chip:hover{border-color:var(--accent);}
+  .meta{font-size:12px; color:var(--muted); margin-top:8px;}
+  footer{
+    border-top:1px solid var(--border); padding:14px 22px; text-align:center;
+    font-size:12.5px; color:var(--muted);
+  }
+  footer a{color:var(--accent); text-decoration:none;}
+  footer a:hover{text-decoration:underline;}
+</style>
+</head>
+<body>
+<header>
+  <h1>Tilemap <span>Renderer</span></h1>
+  <div class="tag">Paste a map &middot; load a tileset &middot; export a PNG &mdash; LaunchTower</div>
+</header>
+
+<main>
+  <section class="card">
+    <h2>1 &middot; Map data</h2>
+    <label for="mapInput">CSV or JSON tile-index map</label>
+    <textarea id="mapInput" spellcheck="false" placeholder="e.g.
+0,1,2,0
+3,4,5,3
+0,1,2,0"></textarea>
+    <div class="chips">
+      <span class="chip" data-sample="csv">Sample CSV</span>
+      <span class="chip" data-sample="json">Sample JSON</span>
+      <span class="chip" data-sample="clear">Clear</span>
+    </div>
+    <div class="status" id="mapStatus"></div>
+
+    <h2 style="margin-top:22px;">2 &middot; Tileset</h2>
+    <label>Tileset image (PNG/JPG)</label>
+    <div class="filebox" id="tilesetBox">
+      <input type="file" id="tilesetFile" accept="image/png,image/jpeg,image/webp">
+      <div id="tilesetLabel">Click to upload a tileset image</div>
+    </div>
+    <div class="chips">
+      <span class="chip" id="useSampleTileset">Use built-in sample tileset</span>
+    </div>
+    <div class="status" id="tilesetStatus"></div>
+
+    <h2 style="margin-top:22px;">3 &middot; Render options</h2>
+    <div class="row">
+      <div>
+        <label for="tileW">Tile width (px)</label>
+        <input type="number" id="tileW" value="16" min="1" max="512">
+      </div>
+      <div>
+        <label for="tileH">Tile height (px)</label>
+        <input type="number" id="tileH" value="16" min="1" max="512">
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label for="zoom">Zoom</label>
+        <select id="zoom">
+          <option value="2">2&times;</option>
+          <option value="3">3&times;</option>
+          <option value="4" selected>4&times;</option>
+          <option value="6">6&times;</option>
+          <option value="8">8&times;</option>
+        </select>
+      </div>
+      <div>
+        <label for="bgMode">Background</label>
+        <select id="bgMode">
+          <option value="transparent" selected>Transparent</option>
+          <option value="checker">Checker</option>
+          <option value="black">Black</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="btnrow">
+      <button class="btn" id="renderBtn">Render map</button>
+      <button class="btn green" id="downloadBtn">Download PNG</button>
+    </div>
+    <div class="meta" id="meta"></div>
+  </section>
+
+  <section class="card">
+    <h2>Preview</h2>
+    <div class="canvaswrap" id="canvasWrap">
+      <canvas id="out" width="320" height="240"></canvas>
+    </div>
+    <div class="hint">
+      CSV: rows of tile indices separated by commas (or spaces / tabs).
+      JSON: an array of arrays, e.g. <code>[[0,1,2],[3,4,5]]</code>.
+      Out-of-range indices render as transparent.
+    </div>
+  </section>
+</main>
+
+<footer>
+  Built by <a href="https://pennypenguinapp-beep.github.io/" target="_blank" rel="noopener">LaunchTower</a> &middot; free pixel-art &amp; game-dev tools
+</footer>
+
+<script>
+(function(){
+  "use strict";
+
+  var canvas = document.getElementById('out');
+  var ctx = canvas.getContext('2d');
+  var mapInput = document.getElementById('mapInput');
+  var mapStatus = document.getElementById('mapStatus');
+  var tilesetBox = document.getElementById('tilesetBox');
+  var tilesetFile = document.getElementById('tileFile');
+  var tilesetFileEl = document.getElementById('tilesetFile');
+  var tilesetLabel = document.getElementById('tilesetLabel');
+  var tilesetStatus = document.getElementById('tilesetStatus');
+  var tileW = document.getElementById('tileW');
+  var tileH = document.getElementById('tileH');
+  var zoomSel = document.getElementById('zoom');
+  var bgMode = document.getElementById('bgMode');
+  var renderBtn = document.getElementById('renderBtn');
+  var downloadBtn = document.getElementById('downloadBtn');
+  var meta = document.getElementById('meta');
+
+  var tilesetImage = null;   // HTMLImageElement or canvas
+  var tilesetW = 0, tilesetH = 0;
+  var lastMap = null;
+
+  function setStatus(el, msg, ok){
+    el.textContent = msg || '';
+    el.className = 'status' + (ok === undefined ? '' : (ok ? ' ok' : ' err'));
+  }
+
+  // ---------- sample tileset (drawn in code) ----------
+  function buildSampleTileset(){
+    var T = 16;
+    var cols = 8, rows = 4;
+    var c = document.createElement('canvas');
+    c.width = T * cols; c.height = T * rows;
+    var g = c.getContext('2d');
+    g.imageSmoothingEnabled = false;
+
+    function px(x, y, color){ g.fillStyle = color; g.fillRect(x, y, 1, 1); }
+    function tile(idx, fn){
+      var ox = (idx % cols) * T, oy = Math.floor(idx / cols) * T;
+      g.save(); g.translate(ox, oy); fn(); g.restore();
+    }
+
+    // 0: grass
+    tile(0, function(){
+      g.fillStyle = '#3f9b4f'; g.fillRect(0,0,T,T);
+      for(var i=0;i<40;i++){ px((Math.random()*T)|0,(Math.random()*T)|0, Math.random()<.5?'#4fb35f':'#358544'); }
+    });
+    // 1: dirt
+    tile(1, function(){
+      g.fillStyle = '#8a5a34'; g.fillRect(0,0,T,T);
+      for(var i=0;i<34;i++){ px((Math.random()*T)|0,(Math.random()*T)|0, Math.random()<.5?'#9c6a3f':'#754a2a'); }
+    });
+    // 2: water
+    tile(2, function(){
+      g.fillStyle = '#2f6fd0'; g.fillRect(0,0,T,T);
+      g.fillStyle = '#4f8fe8';
+      for(var r=0;r<T;r+=4){ for(var x=0;x<T;x+=8){ g.fillRect(x + (r%8?0:4), r, 4, 1); } }
+    });
+    // 3: stone
+    tile(3, function(){
+      g.fillStyle = '#6b7280'; g.fillRect(0,0,T,T);
+      g.fillStyle = '#565d6b';
+      g.fillRect(0,0,T,2); g.fillRect(0,8,T,2); g.fillRect(6,2,2,6); g.fillRect(2,10,2,6); g.fillRect(10,10,2,6);
+      g.fillStyle = '#7d8595'; g.fillRect(0,2,T,1); g.fillRect(0,10,T,1);
+    });
+    // 4: brick
+    tile(4, function(){
+      g.fillStyle = '#a34a3a'; g.fillRect(0,0,T,T);
+      g.fillStyle = '#7c352a';
+      for(var r=0;r<T;r+=4){ g.fillRect(0,r,T,1); if(r%8===0){ for(var x=4;x<T;x+=8) g.fillRect(x,r,1,4); } else { for(var x=0;x<T;x+=8) g.fillRect(x,r,1,4); } }
+    });
+    // 5: sand
+    tile(5, function(){
+      g.fillStyle = '#e0c47a'; g.fillRect(0,0,T,T);
+      for(var i=0;i<30;i++){ px((Math.random()*T)|0,(Math.random()*T)|0, Math.random()<.5?'#eed99a':'#cfae62'); }
+    });
+    // 6: lava
+    tile(6, function(){
+      g.fillStyle = '#d84315'; g.fillRect(0,0,T,T);
+      g.fillStyle = '#ff8a3c';
+      for(var i=0;i<14;i++){ var x=(Math.random()*T)|0,y=(Math.random()*T)|0; g.fillRect(x,y,2,2); }
+      g.fillStyle = '#ffd54f';
+      for(var j=0;j<6;j++){ px((Math.random()*T)|0,(Math.random()*T)|0,'#ffd54f'); }
+    });
+    // 7: tree
+    tile(7, function(){
+      g.fillStyle = '#3f9b4f'; g.fillRect(0,0,T,T);
+      g.fillStyle = '#6b4423'; g.fillRect(6,10,4,6);
+      g.fillStyle = '#2f7a3c';
+      g.fillRect(2,2,12,8);
+      g.fillStyle = '#4fb35f';
+      g.fillRect(4,1,8,6);
+    });
+
+    tilesetImage = c; tilesetW = c.width; tilesetH = c.height;
+    tilesetLabel.textContent = 'Sample tileset (128×64, 8×4 tiles)';
+    tilesetBox.classList.add('loaded');
+    setStatus(tilesetStatus, 'Sample tileset loaded', true);
+  }
+
+  // ---------- map parsing ----------
+  function parseMap(text){
+    text = (text || '').trim();
+    if(!text) return null;
+    if(text.charAt(0) === '['){
+      var arr;
+      try { arr = JSON.parse(text); } catch(e){ throw new Error('Invalid JSON: ' + e.message); }
+      if(!Array.isArray(arr)) throw new Error('JSON must be an array of rows');
+      var rows = arr.map(function(r){
+        if(!Array.isArray(r)) throw new Error('Each row must be an array');
+        return r.map(function(v){
+          if(typeof v === 'string') v = parseInt(v, 10);
+          if(typeof v !== 'number' || !isFinite(v)) throw new Error('Tile index must be a number');
+          return Math.floor(v);
+        });
+      });
+      return rows;
+    }
+    // CSV / whitespace
+    var lines = text.split(/\r?\n/).map(function(l){ return l.trim(); }).filter(function(l){ return l.length; });
+    if(!lines.length) return null;
+    var out = lines.map(function(l){
+      return l.split(/[,;\t ]+/).filter(function(t){ return t.length; }).map(function(t){
+        var n = parseInt(t, 10);
+        if(isNaN(n)) throw new Error('Could not parse tile index "' + t + '"');
+        return n;
+      });
+    });
+    return out;
+  }
+
+  // ---------- rendering ----------
+  function render(){
+    var map;
+    try { map = parseMap(mapInput.value); }
+    catch(e){ setStatus(mapStatus, e.message, false); return; }
+    if(!map){ setStatus(mapStatus, 'Paste a map or load a sample', false); return; }
+    setStatus(mapStatus, map.length + ' rows × ' + map[0].length + ' cols', true);
+    lastMap = map;
+
+    var tw = Math.max(1, parseInt(tileW.value,10) || 16);
+    var th = Math.max(1, parseInt(tileH.value,10) || 16);
+    var z = parseInt(zoomSel.value,10) || 4;
+    var cols = map[0].length, rows = map.length;
+
+    canvas.width = cols * tw * z;
+    canvas.height = rows * th * z;
+    ctx.imageSmoothingEnabled = false;
+
+    // background
+    var mode = bgMode.value;
+    if(mode === 'black'){
+      ctx.fillStyle = '#000'; ctx.fillRect(0,0,canvas.width,canvas.height);
+    } else if(mode === 'checker'){
+      var cs = 16 * z;
+      for(var cy=0; cy<canvas.height; cy+=cs){
+        for(var cx=0; cx<canvas.width; cx+=cs){
+          ctx.fillStyle = ((cx/cs + cy/cs) % 2 === 0) ? '#2a3140' : '#20262f';
+          ctx.fillRect(cx, cy, cs, cs);
+        }
+      }
+    }
+
+    if(!tilesetImage){
+      // no tileset: draw index numbers on colored cells so the map is still visible
+      for(var r=0;r<rows;r++){
+        for(var c=0;c<cols;c++){
+          var idx = map[r][c];
+          if(idx < 0) continue;
+          var hue = (idx * 47) % 360;
+          ctx.fillStyle = 'hsl(' + hue + ',55%,45%)';
+          ctx.fillRect(c*tw*z, r*th*z, tw*z, th*z);
+          ctx.fillStyle = '#fff';
+          ctx.font = 'bold ' + Math.max(10, 8*z) + 'px monospace';
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillText(String(idx), (c+0.5)*tw*z, (r+0.5)*th*z);
+        }
+      }
+      meta.textContent = cols + '×' + rows + ' tiles · no tileset (showing indices) · ' + canvas.width + '×' + canvas.height + ' px';
+      return;
+    }
+
+    var tcols = Math.max(1, Math.floor(tilesetW / tw));
+    for(var r2=0;r2<rows;r2++){
+      for(var c2=0;c2<cols;c2++){
+        var idx2 = map[r2][c2];
+        if(idx2 < 0 || idx2 >= tcols * Math.floor(tilesetH / th)) continue;
+        var sx = (idx2 % tcols) * tw;
+        var sy = Math.floor(idx2 / tcols) * th;
+        ctx.drawImage(tilesetImage, sx, sy, tw, th, c2*tw*z, r2*th*z, tw*z, th*z);
+      }
+    }
+    meta.textContent = cols + '×' + rows + ' tiles · tileset ' + tilesetW + '×' + tilesetH + ' · ' + canvas.width + '×' + canvas.height + ' px @ ' + z + '×';
+  }
+
+  function download(){
+    if(canvas.width === 0 || canvas.height === 0) return;
+    var a = document.createElement('a');
+    a.download = 'tilemap-render.png';
+    a.href = canvas.toDataURL('image/png');
+    document.body.appendChild(a); a.click(); a.remove();
+  }
+
+  // ---------- events ----------
+  renderBtn.addEventListener('click', render);
+  downloadBtn.addEventListener('click', download);
+
+  tilesetFileEl.addEventListener('change', function(){
+    var f = tilesetFileEl.files && tilesetFileEl.files[0];
+    if(!f) return;
+    var reader = new FileReader();
+    reader.onload = function(ev){
+      var img = new Image();
+      img.onload = function(){
+        tilesetImage = img; tilesetW = img.naturalWidth; tilesetH = img.naturalHeight;
+        tilesetLabel.textContent = f.name + ' (' + img.naturalWidth + '×' + img.naturalHeight + ')';
+        tilesetBox.classList.add('loaded');
+        setStatus(tilesetStatus, 'Tileset loaded', true);
+        render();
+      };
+      img.onerror = function(){ setStatus(tilesetStatus, 'Could not read that image', false); };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(f);
+  });
+
+  document.getElementById('useSampleTileset').addEventListener('click', function(){
+    buildSampleTileset(); render();
+  });
+
+  var SAMPLE_CSV = [
+    '7,0,0,0,0,0,0,7',
+    '0,0,5,5,5,5,0,0',
+    '0,5,5,6,6,5,5,0',
+    '0,5,6,6,6,6,5,0',
+    '0,5,6,6,6,6,5,0',
+    '0,5,5,6,6,5,5,0',
+    '0,0,5,5,5,5,0,0',
+    '7,0,0,0,0,0,0,7'
+  ].join('\n');
+
+  var SAMPLE_JSON = JSON.stringify([
+    [3,3,3,3,3,3,3,3],
+    [3,4,4,4,4,4,4,3],
+    [3,4,2,2,2,2,4,3],
+    [3,4,2,1,1,2,4,3],
+    [3,4,2,1,1,2,4,3],
+    [3,4,2,2,2,2,4,3],
+    [3,4,4,4,4,4,4,3],
+    [3,3,3,3,3,3,3,3]
+  ], null, 2);
+
+  Array.prototype.forEach.call(document.querySelectorAll('.chip[data-sample]'), function(chip){
+    chip.addEventListener('click', function(){
+      var kind = chip.getAttribute('data-sample');
+      if(kind === 'clear'){ mapInput.value = ''; setStatus(mapStatus, '', undefined); render(); return; }
+      mapInput.value = (kind === 'json') ? SAMPLE_JSON : SAMPLE_CSV;
+      render();
+    });
+  });
+
+  [tileW, tileH, zoomSel, bgMode].forEach(function(el){
+    el.addEventListener('change', render);
+  });
+
+  // ---------- init ----------
+  buildSampleTileset();
+  mapInput.value = SAMPLE_CSV;
+  render();
+})();
+</script>
+</body>
+</html>
